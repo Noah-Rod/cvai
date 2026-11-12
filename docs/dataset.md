@@ -27,7 +27,11 @@ Three kinds of data. None of it is in git (see `data/README.md`).
 ## 1. Card faces
 
 1. Photograph each card **upright**, from straight above, on a dark, plain background, with
-   no glare. Name the file after the label: `rosen_ass.jpg`.
+   no glare. Name each JPEG `image_<suit><rank>.jpg`. Suit codes: `E` = Eicheln, `S` =
+   Schilten, `R` = Rosen, `G` = Schellen. Rank codes: `6`, `7`, `8`, `9`, `B` = Banner,
+   `U` = Under, `O` = Ober, `K` = König, `A` = Ass. For example, `image_SU.jpg` is
+   Schellen Under and `image_EA.jpg` is Eicheln Ass. The extractor writes standard label
+   names such as `data/cards/schellen_under.png`.
 2. `uv run --extra synth python tools/extract_cards.py --input photos/cards --out data/cards`
 3. Open `data/cards/_overview.jpg`. Every card should be straight and upright. The red box
    should cover rank + suit symbol in the corner; if it doesn't, adjust `CORNER_REGION` (and
