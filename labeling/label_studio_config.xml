@@ -1,0 +1,42 @@
+<View>
+  <Header value="Click the 4 corners of every card: top-left, top-right, bottom-right, bottom-left (as printed on the card). Estimate corners hidden by other cards or your thumb."/>
+  <Image name="image" value="$image" zoom="true" zoomControl="true"/>
+  <PolygonLabels name="card" toName="image" strokeWidth="2" pointSize="small" opacity="0.25">
+    <Label value="eicheln_6" background="#2e8b57"/>
+    <Label value="eicheln_7" background="#2e8b57"/>
+    <Label value="eicheln_8" background="#2e8b57"/>
+    <Label value="eicheln_9" background="#2e8b57"/>
+    <Label value="eicheln_banner" background="#2e8b57"/>
+    <Label value="eicheln_under" background="#2e8b57"/>
+    <Label value="eicheln_ober" background="#2e8b57"/>
+    <Label value="eicheln_koenig" background="#2e8b57"/>
+    <Label value="eicheln_ass" background="#2e8b57"/>
+    <Label value="schilten_6" background="#1e90ff"/>
+    <Label value="schilten_7" background="#1e90ff"/>
+    <Label value="schilten_8" background="#1e90ff"/>
+    <Label value="schilten_9" background="#1e90ff"/>
+    <Label value="schilten_banner" background="#1e90ff"/>
+    <Label value="schilten_under" background="#1e90ff"/>
+    <Label value="schilten_ober" background="#1e90ff"/>
+    <Label value="schilten_koenig" background="#1e90ff"/>
+    <Label value="schilten_ass" background="#1e90ff"/>
+    <Label value="rosen_6" background="#dc143c"/>
+    <Label value="rosen_7" background="#dc143c"/>
+    <Label value="rosen_8" background="#dc143c"/>
+    <Label value="rosen_9" background="#dc143c"/>
+    <Label value="rosen_banner" background="#dc143c"/>
+    <Label value="rosen_under" background="#dc143c"/>
+    <Label value="rosen_ober" background="#dc143c"/>
+    <Label value="rosen_koenig" background="#dc143c"/>
+    <Label value="rosen_ass" background="#dc143c"/>
+    <Label value="schellen_6" background="#ffa500"/>
+    <Label value="schellen_7" background="#ffa500"/>
+    <Label value="schellen_8" background="#ffa500"/>
+    <Label value="schellen_9" background="#ffa500"/>
+    <Label value="schellen_banner" background="#ffa500"/>
+    <Label value="schellen_under" background="#ffa500"/>
+    <Label value="schellen_ober" background="#ffa500"/>
+    <Label value="schellen_koenig" background="#ffa500"/>
+    <Label value="schellen_ass" background="#ffa500"/>
+  </PolygonLabels>
+</View>

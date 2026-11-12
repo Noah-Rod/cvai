@@ -1,0 +1,79 @@
+name: jass-cv
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: jass-cv-api:dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      JASS_MODEL_PATH: ${JASS_MODEL_PATH:-models/best.pt}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models:ro
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    image: jass-cv-frontend:dev
+    environment:
+      JASS_API_URL: http://api:8000
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync   # streamlit hot-reloads on its own
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  # Generic runner for the data/training tools (CPU). Examples:
+  #   docker compose --profile tools run --rm tools -m jass_cv.synth --out data/synth/smoke --n 50 --placeholder-cards
+  #   docker compose --profile tools run --rm tools tools/train.py --data data/exports/x/data.yaml --name x
+  # On Windows, running the same commands natively with uv is usually simpler (docs/training.md).
+  tools:
+    profiles: ["tools"]
+    image: jass-cv-api:dev
+    working_dir: /app
+    user: root
+    entrypoint: ["python"]
+    command: ["tools/train.py", "--help"]
+    shm_size: 2gb  # PyTorch dataloader workers need shared memory
+    volumes:
+      - ./src:/app/src:ro
+      - ./tools:/app/tools:ro
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./runs:/app/runs
+
+  # Self-hosted labeling of the real photos: http://localhost:8080
+  #   docker compose --profile label up -d labelstudio
+  labelstudio:
+    profiles: ["label"]
+    image: heartexlabs/label-studio:1.20.0
+    ports:
+      - "${LABEL_STUDIO_PORT:-8080}:8080"
+    volumes:
+      - labelstudio-data:/label-studio/data
+    restart: unless-stopped
+
+volumes:
+  labelstudio-data:

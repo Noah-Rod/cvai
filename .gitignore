@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# Data & model artefacts are not versioned in git (see docs/architecture.md, "data versioning")
+data/*
+!data/README.md
+models/*
+!models/README.md
+runs/
+*.pt
+*.onnx
+captures/
