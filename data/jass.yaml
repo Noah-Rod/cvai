@@ -1,0 +1,43 @@
+# YOLO dataset config. Class order MUST match src/jass_cv/cards.py (checked in tests).
+path: data/jass   # relative to the repo root — run training from there
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: eicheln_6
+  1: eicheln_7
+  2: eicheln_8
+  3: eicheln_9
+  4: eicheln_banner
+  5: eicheln_under
+  6: eicheln_ober
+  7: eicheln_koenig
+  8: eicheln_ass
+  9: schilten_6
+  10: schilten_7
+  11: schilten_8
+  12: schilten_9
+  13: schilten_banner
+  14: schilten_under
+  15: schilten_ober
+  16: schilten_koenig
+  17: schilten_ass
+  18: rosen_6
+  19: rosen_7
+  20: rosen_8
+  21: rosen_9
+  22: rosen_banner
+  23: rosen_under
+  24: rosen_ober
+  25: rosen_koenig
+  26: rosen_ass
+  27: schellen_6
+  28: schellen_7
+  29: schellen_8
+  30: schellen_9
+  31: schellen_banner
+  32: schellen_under
+  33: schellen_ober
+  34: schellen_koenig
+  35: schellen_ass

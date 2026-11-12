@@ -1,0 +1,60 @@
+name: jass-cv
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: jass-cv-api:dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      JASS_MODEL_PATH: ${JASS_MODEL_PATH:-models/best.pt}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models:ro
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    image: jass-cv-frontend:dev
+    environment:
+      JASS_API_URL: http://api:8000
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync   # streamlit hot-reloads on its own
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+
+  # One-off CPU training / smoke test:  docker compose --profile train run --rm train
+  # Real training belongs on a GPU (see docs/dataset.md).
+  train:
+    profiles: ["train"]
+    image: jass-cv-api:dev
+    working_dir: /app
+    user: root
+    command: ["python", "tools/train.py", "--epochs", "1", "--fraction", "0.1"]
+    volumes:
+      - ./tools:/app/tools:ro
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./runs:/app/runs

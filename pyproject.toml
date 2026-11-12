@@ -1,0 +1,63 @@
+[project]
+name = "jass-cv"
+version = "0.1.0"
+description = "Detect Swiss German Jass cards in images and live video."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+]
+
+# Each service installs only the extras it needs (see docker/*.Dockerfile).
+# Extras deliberately don't reference each other so `uv pip install -r pyproject.toml --extra X`
+# works without installing the project itself.
+[project.optional-dependencies]
+inference = [
+    "ultralytics>=8.3",
+    "opencv-python>=4.9",
+]
+api = [
+    "ultralytics>=8.3",
+    "opencv-python>=4.9",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+]
+frontend = [
+    "streamlit>=1.50",
+    "requests>=2.32",
+]
+live = [
+    "ultralytics>=8.3",
+    "opencv-python>=4.9",
+    "requests>=2.32",
+]
+dev = [
+    "fastapi>=0.115",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jass_cv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
