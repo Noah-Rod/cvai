@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from jass_cv.cards import CLASS_NAMES
 
 
 class BBox(BaseModel):
@@ -20,6 +22,9 @@ class Detection(BaseModel):
     rank: str
     confidence: float = Field(ge=0, le=1)
     bbox: BBox
+    polygon: list[tuple[float, float]] | None = Field(
+        default=None, description="4 corners of the rotated box (OBB models only)"
+    )
 
 
 class PredictionResponse(BaseModel):
@@ -28,7 +33,7 @@ class PredictionResponse(BaseModel):
     image_height: int
     inference_ms: float
     detections: list[Detection]
-    cards: list[str] = Field(description="Unique card labels found, sorted by class id.")
+    cards: list[str] = Field(description="Card labels in the hand, sorted by suit and rank.")
 
 
 class HealthResponse(BaseModel):
@@ -36,3 +41,16 @@ class HealthResponse(BaseModel):
     model: str
     backend: str
     version: str
+
+
+class HandDiffRequest(BaseModel):
+    before: list[str] = Field(examples=[["rosen_ass", "eicheln_6"]])
+    after: list[str] = Field(examples=[["eicheln_6"]])
+
+    @field_validator("before", "after")
+    @classmethod
+    def _known_cards(cls, v: list[str]) -> list[str]:
+        unknown = sorted(set(v) - set(CLASS_NAMES))
+        if unknown:
+            raise ValueError(f"unknown card labels: {unknown}")
+        return v

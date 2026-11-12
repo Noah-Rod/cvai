@@ -45,16 +45,35 @@ services:
         - action: rebuild
           path: ./pyproject.toml
 
-  # One-off CPU training / smoke test:  docker compose --profile train run --rm train
-  # Real training belongs on a GPU (see docs/dataset.md).
-  train:
-    profiles: ["train"]
+  # Generic runner for the data/training tools (CPU). Examples:
+  #   docker compose --profile tools run --rm tools -m jass_cv.synth --out data/synth/smoke --n 50 --placeholder-cards
+  #   docker compose --profile tools run --rm tools tools/train.py --data data/exports/x/data.yaml --name x
+  # On Windows, running the same commands natively with uv is usually simpler (docs/training.md).
+  tools:
+    profiles: ["tools"]
     image: jass-cv-api:dev
     working_dir: /app
     user: root
-    command: ["python", "tools/train.py", "--epochs", "1", "--fraction", "0.1"]
+    entrypoint: ["python"]
+    command: ["tools/train.py", "--help"]
+    shm_size: 2gb  # PyTorch dataloader workers need shared memory
     volumes:
+      - ./src:/app/src:ro
       - ./tools:/app/tools:ro
       - ./data:/app/data
       - ./models:/app/models
       - ./runs:/app/runs
+
+  # Self-hosted labeling of the real photos: http://localhost:8080
+  #   docker compose --profile label up -d labelstudio
+  labelstudio:
+    profiles: ["label"]
+    image: heartexlabs/label-studio:1.20.0
+    ports:
+      - "${LABEL_STUDIO_PORT:-8080}:8080"
+    volumes:
+      - labelstudio-data:/label-studio/data
+    restart: unless-stopped
+
+volumes:
+  labelstudio-data:

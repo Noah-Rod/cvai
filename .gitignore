@@ -9,7 +9,6 @@ dist/
 
 # Data & model artefacts are not versioned in git (see docs/architecture.md, "data versioning")
 data/*
-!data/jass.yaml
 !data/README.md
 models/*
 !models/README.md

@@ -1,0 +1,7 @@
+# Keep LF line endings in the repo and in Docker builds, also when cloned on Windows.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.jpg binary
+*.png binary
+*.pt binary

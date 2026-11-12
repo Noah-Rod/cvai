@@ -25,6 +25,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from jass_cv.drawing import SUIT_COLORS  # noqa: E402
+from jass_cv.hand import select_hand  # noqa: E402
 from jass_cv.schemas import Detection, PredictionResponse  # noqa: E402
 
 
@@ -36,10 +37,8 @@ class LocalPredictor:
         self.name = f"local:{self.detector.name}"
 
     def __call__(self, frame_bgr: np.ndarray, conf: float, iou: float) -> list[Detection]:
-        from jass_cv.detector import dedupe_by_card
-
         img = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
-        return dedupe_by_card(self.detector.predict(img, conf, iou))
+        return self.detector.predict(img, conf, iou)
 
 
 class ApiPredictor:
@@ -68,7 +67,10 @@ def draw(frame: np.ndarray, detections: list[Detection]) -> None:
         color = (b, g, r)
         p1 = (int(d.bbox.x1), int(d.bbox.y1))
         p2 = (int(d.bbox.x2), int(d.bbox.y2))
-        cv2.rectangle(frame, p1, p2, color, 2)
+        if d.polygon:
+            cv2.polylines(frame, [np.int32(d.polygon)], True, color, 2)
+        else:
+            cv2.rectangle(frame, p1, p2, color, 2)
         cv2.putText(
             frame,
             f"{d.display_name} {d.confidence:.2f}",
@@ -97,6 +99,7 @@ def main() -> None:
     ap.add_argument("--api", help="API base URL; if set, frames are sent to the API instead")
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--iou", type=float, default=0.45)
+    ap.add_argument("--max-cards", type=int, help="cards in hand, if known: keep the N best")
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--device", default="cpu", help="cpu, 0 (cuda), mps")
     ap.add_argument("--captures", type=Path, default=Path("captures"))
@@ -108,7 +111,12 @@ def main() -> None:
         else LocalPredictor(args.weights, args.device, args.imgsz)
     )
     source = int(args.source) if args.source.isdigit() else args.source
-    cap = cv2.VideoCapture(source)
+    if isinstance(source, int) and sys.platform == "win32":
+        cap = cv2.VideoCapture(
+            source, cv2.CAP_DSHOW
+        )  # opens much faster than the default on Windows
+    else:
+        cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         sys.exit(f"Could not open source {args.source!r}")
 
@@ -119,7 +127,7 @@ def main() -> None:
             if not ok:
                 break
             t0 = time.perf_counter()
-            detections = predictor(raw, conf, args.iou)
+            detections = select_hand(predictor(raw, conf, args.iou), args.max_cards)
             fps = 0.9 * fps + 0.1 * (1 / max(time.perf_counter() - t0, 1e-6))
             frame = raw
         shown = frame.copy()

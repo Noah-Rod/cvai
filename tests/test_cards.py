@@ -1,6 +1,5 @@
+import re
 from pathlib import Path
-
-import yaml
 
 from jass_cv.cards import CARDS, CLASS_NAMES, RANKS, SUITS, card_by_label
 
@@ -18,6 +17,6 @@ def test_display_name():
     assert card_by_label("eicheln_koenig").display_name == "Eicheln König"
 
 
-def test_dataset_yaml_matches_classes():
-    cfg = yaml.safe_load((ROOT / "data/jass.yaml").read_text())
-    assert cfg["names"] == dict(enumerate(CLASS_NAMES))
+def test_label_studio_config_matches_classes():
+    xml = (ROOT / "labeling/label_studio_config.xml").read_text()
+    assert re.findall(r'Label value="([a-z0-9_]+)"', xml) == list(CLASS_NAMES)

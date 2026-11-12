@@ -1,16 +1,20 @@
-"""Train a YOLO model on the Jass dataset and copy the best weights to models/.
+"""Train a YOLO model on an exported dataset and copy the best weights to models/<name>.pt.
 
-  python tools/train.py --model yolo11n.pt --epochs 100
-  python tools/train.py --model yolo11s.pt --device 0 --export onnx
+  # upright boxes (full_aabb / visible_aabb / corner_aabb exports)
+  python tools/train.py --data data/exports/v1-corner_aabb/data.yaml \
+      --model yolo11n.pt --name v1-corner_aabb
+  # rotated boxes (full_obb / corner_obb exports) need an OBB checkpoint
+  python tools/train.py --data data/exports/v1-corner_obb/data.yaml \
+      --model yolo11n-obb.pt --name v1-corner_obb
 
-For real training use a GPU (local, Colab or Kaggle); CPU is fine only for a smoke test
-(`--epochs 1 --fraction 0.1`).
+Same command on Windows, Linux, macOS and Kaggle; only --device changes (cpu, 0 for CUDA, mps).
+Quick CPU smoke test: --epochs 1 --fraction 0.1 --imgsz 320
+Real-photo evaluation is done separately with tools/evaluate.py.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 from pathlib import Path
 
@@ -18,56 +22,46 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--data", type=Path, default=ROOT / "data/jass.yaml")
-    ap.add_argument("--model", default="yolo11n.pt", help="pretrained checkpoint to fine-tune")
-    ap.add_argument("--epochs", type=int, default=100)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    ap.add_argument(
+        "--data", type=Path, required=True, help="data.yaml from jass_cv.dataset export"
+    )
+    ap.add_argument("--model", default="yolo11n.pt", help="checkpoint to fine-tune (or a .yaml)")
+    ap.add_argument("--name", required=True, help="run name, also the weights file name")
+    ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--fraction", type=float, default=1.0, help="use a fraction of the train set")
-    ap.add_argument("--name", default="jass")
     ap.add_argument("--export", choices=["onnx"], help="also export the best model")
     args = ap.parse_args()
 
     from ultralytics import YOLO
 
-    os.chdir(ROOT)  # data/jass.yaml uses repo-relative paths
     model = YOLO(args.model)
     model.train(
-        data=str(args.data),
+        data=str(args.data.resolve()),
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
+        workers=args.workers,
         fraction=args.fraction,
         project=str(ROOT / "runs"),
         name=args.name,
         exist_ok=True,
-        # Card faces are not mirror-symmetric: no horizontal flips, small rotations instead.
+        # Card faces are not mirror-symmetric; the generator already varies rotation/perspective.
         fliplr=0.0,
-        degrees=15.0,
+        degrees=5.0,
     )
-    best = Path(model.trainer.best)
-    dest = ROOT / "models/best.pt"
+    dest = ROOT / "models" / f"{args.name}.pt"
     dest.parent.mkdir(exist_ok=True)
-    shutil.copy(best, dest)
-    print(f"Best weights copied to {dest}")
-
-    metrics = YOLO(dest).val(
-        data=str(args.data),
-        split="test",
-        imgsz=args.imgsz,
-        device=args.device,
-        project=str(ROOT / "runs"),
-        name=f"{args.name}-test",
-        exist_ok=True,
-    )
-    print(f"test mAP50={metrics.box.map50:.3f}  mAP50-95={metrics.box.map:.3f}")
+    shutil.copy(model.trainer.best, dest)
+    print(f"Best weights → {dest}   (plots and metrics: runs/{args.name}/)")
 
     if args.export:
-        out = YOLO(dest).export(format=args.export, imgsz=args.imgsz)
-        print(f"Exported {out}")
+        print(f"Exported {YOLO(dest).export(format=args.export, imgsz=args.imgsz)}")
 
 
 if __name__ == "__main__":

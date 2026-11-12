@@ -26,7 +26,12 @@ class Detector(Protocol):
     def predict(self, image: Image.Image, conf: float, iou: float) -> list[Detection]: ...
 
 
-def make_detection(class_id: int, confidence: float, box: tuple[float, ...]) -> Detection:
+def make_detection(
+    class_id: int,
+    confidence: float,
+    box: tuple[float, ...],
+    polygon: list[list[float]] | None = None,
+) -> Detection:
     card = card_by_id(class_id)
     x1, y1, x2, y2 = (float(v) for v in box)
     return Detection(
@@ -37,6 +42,7 @@ def make_detection(class_id: int, confidence: float, box: tuple[float, ...]) -> 
         rank=card.rank,
         confidence=round(float(confidence), 4),
         bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
+        polygon=[(round(float(x), 1), round(float(y), 1)) for x, y in polygon] if polygon else None,
     )
 
 
@@ -61,7 +67,7 @@ class DummyDetector:
 
 
 class YoloDetector:
-    """Ultralytics YOLO model (.pt or exported .onnx)."""
+    """Ultralytics YOLO model (.pt or exported .onnx), upright (detect) or rotated (OBB) boxes."""
 
     def __init__(self, weights: Path, device: str = "cpu", img_size: int = 640) -> None:
         from ultralytics import YOLO  # heavy import, keep it lazy
@@ -86,9 +92,21 @@ class YoloDetector:
         result = self.model.predict(
             image, conf=conf, iou=iou, imgsz=self.img_size, device=self.device, verbose=False
         )[0]
+        if getattr(result, "obb", None) is not None:  # rotated boxes
+            o = result.obb
+            rows = zip(o.cls.tolist(), o.conf.tolist(), o.xyxyxyxy.tolist(), strict=True)
+            return [
+                make_detection(int(cls), conf, _poly_bounds(poly), polygon=poly)
+                for cls, conf, poly in rows
+            ]
         b = result.boxes
         rows = zip(b.cls.tolist(), b.conf.tolist(), b.xyxy.tolist(), strict=True)
         return [make_detection(int(cls), conf, tuple(box)) for cls, conf, box in rows]
+
+
+def _poly_bounds(poly: list[list[float]]) -> tuple[float, float, float, float]:
+    xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 def load_detector(settings: Settings) -> Detector:

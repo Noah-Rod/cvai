@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from jass_cv.config import get_settings
-from jass_cv.detector import dedupe_by_card, make_detection
 
 
 @pytest.fixture
@@ -56,9 +55,14 @@ def test_predict_rejects_non_image(client):
     assert r.status_code == 400
 
 
-def test_dedupe_keeps_best_box_per_card():
-    a = make_detection(0, 0.6, (0, 0, 10, 10))
-    b = make_detection(0, 0.9, (5, 5, 15, 15))
-    c = make_detection(1, 0.7, (0, 0, 10, 10))
-    out = dedupe_by_card([a, b, c])
-    assert [(d.class_id, d.confidence) for d in out] == [(0, 0.9), (1, 0.7)]
+def test_predict_max_cards(client):
+    r = client.post("/predict", files={"file": ("x.jpg", _jpeg())}, params={"max_cards": 1})
+    assert r.status_code == 200 and len(r.json()["detections"]) == 1
+
+
+def test_hand_diff(client):
+    r = client.post(
+        "/hand/diff", json={"before": ["rosen_ass", "eicheln_6"], "after": ["eicheln_6"]}
+    )
+    assert r.json() == {"played": ["rosen_ass"], "appeared": []}
+    assert client.post("/hand/diff", json={"before": ["joker"], "after": []}).status_code == 422

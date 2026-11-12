@@ -28,7 +28,11 @@ def draw_detections(image: Image.Image, detections: Iterable[Detection]) -> Imag
     for d in detections:
         color = SUIT_COLORS.get(d.suit, (255, 255, 255))
         b = d.bbox
-        draw.rectangle((b.x1, b.y1, b.x2, b.y2), outline=color, width=line)
+        if d.polygon:
+            pts = [tuple(pt) for pt in d.polygon]
+            draw.line([*pts, pts[0]], fill=color, width=line, joint="curve")
+        else:
+            draw.rectangle((b.x1, b.y1, b.x2, b.y2), outline=color, width=line)
         text = f"{d.display_name} {d.confidence:.2f}"
         text_h = draw.textbbox((0, 0), text, font=font)[3]
         tx, ty = b.x1, max(0, b.y1 - text_h - 2 * line)

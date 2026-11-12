@@ -1,135 +1,141 @@
 # Architecture
 
-## Current scaffold
+## Goal
+
+Recognise the cards of a **fanned Jass hand, photographed from the player's own point of
+view**. The hand holds a variable number of cards (e.g. 9 in Schieber, 12 in three-player
+Jass, fewer after playing). A photo taken after each card is played tells which card
+it was.
+
+The project is a small **study** with an app as its demo:
+
+> *Can a detector trained only on synthetic images recognise the cards of a real fanned
+> hand, and which kind of box is best for heavily overlapping cards?*
+
+## Decisions
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| D1 | Use case | Fanned hand, own POV, variable hand size | One focused, hard CV problem (overlap, rotation, cards that look alike) |
+| D2 | What we label | **Compared experimentally** (experiment 2) | Corners are readable but sometimes not enough, so the answer isn't obvious |
+| D3 | Training data | **Synthetic** (own generator) + a few real photos | Labels for free, any amount; the generator is our own CV work |
+| D4 | Labeling | **Label Studio, self-hosted** (`docker compose --profile label`) | Only needed for the small real set; data stays local |
+| D5 | Model | Ultralytics YOLO11n (upright boxes) / YOLO11n-obb (rotated boxes) | Fast path, both box types, same code; AGPL is fine for a course project |
+| D6 | Training compute | Same `tools/train.py` locally on Windows (CPU, slow) **or on Kaggle (free GPU)** | No GPU available; experiments need ~8 runs |
+| D7 | Serving | PyTorch inside the API, local only | No deployment, so image size doesn't matter |
+| D8 | Live view | OpenCV desktop tool now; in-browser live view is a stretch goal | Browser live view is nice-to-have |
+| D9 | Data & weights storage | Not in git: shared drive for `data/cards`, `data/real`; weights as GitHub Release assets | Generated data is reproducible from cards + seed |
+| D10 | Deliverables | Live demo + final presentation | |
+
+## Pipeline
 
 ```mermaid
 flowchart LR
-    subgraph host["Developer machine"]
-        cam["Webcam / video / RTSP"] --> live["tools/live_detect.py<br/>(OpenCV window)"]
+    subgraph data["Data (person A)"]
+        photos["36 card photos"] --> extract["tools/extract_cards.py<br/>(outline → perspective warp)"]
+        extract --> faces[("data/cards")]
+        faces --> synth["jass_cv.synth<br/>fan layout · occlusion · thumb<br/>lighting · blur · noise"]
+        bg[("backgrounds / hand cut-outs")] --> synth
+        synth --> ann[("synthetic annotations<br/>quad · corner · visibility")]
+        real["real POV photos"] --> ls["Label Studio"] --> conv["labelstudio_to_annotations.py"] --> realann[("real annotations")]
+        real --> csv[("test: hands.csv<br/>card list per photo")]
     end
-    subgraph compose["docker compose"]
-        fe["frontend<br/>Streamlit :8501"] -- "HTTP multipart" --> api["api<br/>FastAPI :8000"]
-        api --> det["Detector interface"]
-        det --> yolo["YoloDetector<br/>(.pt / .onnx)"]
-        det --> dummy["DummyDetector<br/>(no weights yet)"]
-        models[("./models<br/>best.pt")] -. "read-only mount" .-> yolo
-        train["train (profile)<br/>tools/train.py"] --> models
+    subgraph exp["Experiments (person B)"]
+        ann --> export["jass_cv.dataset export<br/>5 box variants"]
+        realann --> export
+        export --> train["tools/train.py<br/>(local or Kaggle)"]
+        train --> weights[("models/*.pt")]
+        weights --> eval["tools/evaluate.py<br/>card P/R/F1 · exact-hand accuracy"]
+        csv --> eval
     end
-    live -- "--api mode" --> api
-    live -- "local mode" --> det
-    data[("./data<br/>YOLO dataset")] --> train
+    subgraph app["Demo"]
+        weights --> api["FastAPI"]
+        api --> fe["Streamlit<br/>hand · played card"]
+        api --> live["live_detect.py"]
+    end
 ```
 
-Principles:
+## The two experiments
 
-- **One package, `jass_cv`**, shared by every service. Each Docker image installs only the
-  extras it needs: the frontend image has no torch.
-- **`Detector` protocol** (`src/jass_cv/detector.py`) is the only seam between "model" and
-  "apps". Swapping YOLO for ONNX Runtime or a two-stage pipeline touches one file.
-- **`cards.py` is the single source of truth** for class ids and names.
-- **The frontend only talks HTTP to the API**, so the API is the product and the UI is one
-  client of it (the live tool is another).
-- **The dummy detector** lets track B (apps) start before track A (model) delivers.
+### Experiment 1: how well does synthetic data transfer to real photos?
 
-## Open decisions — to discuss
+Train the same model (best box variant from experiment 2, or `corner_obb` as default) on:
 
-Each decision lists the options and a recommendation, given **~30 h total and 2 people**.
-
-### D1. Problem formulation — *the most important one*
-
-First, what is the use case? (a) cards lying on the table, e.g. the cards of a trick or a
-counted pile, (b) a fanned hand where cards overlap heavily, or (c) both.
-
-| Option | Pros | Cons |
-|---|---|---|
-| **A. One-stage detector, 36 classes, whole-card box** | simplest, one model, standard tooling | overlapping fanned cards are hard; needs data for every class |
-| B. One-stage detector, 36 classes, **corner region** box | works for fanned hands, small boxes and little occlusion | only works if the corner shows the rank and suit clearly enough on *our* deck; small objects need a larger input size |
-| C. Two-stage: 1-class "card" detector + 36-class classifier on the crop | classifier is cheap to train, even on synthetic crops; detector needs few labels | two models, more code, crops fail on occluded cards |
-
-**Recommendation:** A, scoped to cards on the table (use case a). Keep C as the fallback
-if Under/Ober or 6–9 confusions stay high.
-
-### D2. Model & framework
-
-| Option | Licence | Notes |
-|---|---|---|
-| **Ultralytics YOLO11 n/s** | AGPL-3.0 | fastest path: training, augmentations, metrics, ONNX export built in. *Already wired in.* |
-| RT-DETR (via Ultralytics) | AGPL-3.0 | transformer, often better on small data, slower on CPU |
-| RF-DETR (Roboflow) | Apache-2.0 | strong accuracy, permissive licence, newer and less documented |
-| torchvision Faster R-CNN | BSD | permissive, but much more code to write |
-
-**Recommendation:** YOLO11n, then YOLO11s if accuracy is short. AGPL is fine for a
-school/open-source project. If this ever becomes a closed product, move to RF-DETR.
-
-### D3. Where the training data comes from
-
-| Option | Effort | Notes |
-|---|---|---|
-| Real photos + manual labels only | high (~1,500 boxes) | most realistic, slowest |
-| **Hybrid: synthetic + real** | medium | photograph each of the 36 cards once, cut out, paste onto random backgrounds with rotation/scale/light/occlusion → unlimited auto-labeled data; real photos for val/test |
-| Public dataset | low, if one exists | none found yet for Swiss German cards; worth a 15-min search |
-
-**Recommendation:** hybrid. The generator is ~4 h of work and replaces many hours of
-labeling. The test set must be real photos.
-
-### D4. Labeling tool
-
-| Option | Notes |
+| Run | Training data |
 |---|---|
-| **Roboflow** (cloud) | fastest UI, model-assisted labeling, versioned exports in YOLO format; free plan makes the dataset public |
-| Label Studio (self-hosted) | could be a `labeling` service in our compose; data stays local |
-| CVAT | powerful, heavier to run |
+| 1a | synthetic, `--aug none` (clean renders) |
+| 1b | synthetic, `--aug basic` (brightness/contrast) |
+| 1c | synthetic, `--aug full` (+ colour temperature, uneven light, blur, noise, shadows, JPEG) |
+| 1d | 1c + ~20 real labeled photos |
+| 1e | 1c + ~50 real labeled photos |
 
-**Recommendation:** Roboflow if a public dataset is OK, otherwise Label Studio as a compose
-service.
+Optional extra factors: real background photos vs procedural backgrounds; thumb occluder on/off.
 
-### D5. Training compute
+### Experiment 2: what should the box cover?
 
-Local GPU (if one of you has NVIDIA), Apple MPS (`--device mps`, works but slower), or
-**Colab/Kaggle free GPUs**. The Docker `train` profile is CPU-only and meant for smoke tests.
-**Recommendation:** a small Kaggle/Colab notebook that clones the repo and runs
-`tools/train.py`.
+The generator knows the full geometry of every card, so all variants come from **the same
+images**. Only the labels differ:
 
-### D6. Data & model storage
-
-`data/` and `models/` are git-ignored. Options: shared Google Drive / OneDrive (simplest),
-Roboflow dataset versions (if D4 = Roboflow), DVC with a remote (proper, but extra tooling),
-Hugging Face Hub. **Recommendation:** Roboflow or a shared drive for data; publish weights
-as a GitHub Release asset per model version.
-
-### D7. Serving / inference runtime
-
-| Option | Image size | Notes |
+| Variant | Box | Expected trade-off |
 |---|---|---|
-| PyTorch + Ultralytics in the API *(current)* | large (torch CPU) | zero extra work |
-| **ONNX export + onnxruntime** | much smaller | faster on CPU; Ultralytics exports it; needs a small `OnnxDetector` (pre/post-processing + NMS) |
+| `full_aabb` | upright, whole card incl. hidden part | boxes of neighbouring cards overlap almost completely |
+| `full_obb` | rotated, whole card | fits rotated cards, still mostly hidden |
+| `visible_aabb` | upright, visible part only | honest, but odd shapes (synthetic only) |
+| `corner_aabb` | upright, rank/suit corner | small, rarely hidden, but sometimes ambiguous |
+| `corner_obb` | rotated, rank/suit corner | probably the best fit for a fan |
 
-**Recommendation:** ship with PyTorch first, add `OnnxDetector` in track B if time allows.
+Plan for 4 runs (e.g. `full_aabb`, `full_obb`, `corner_aabb`, `corner_obb`). `visible_aabb`
+is optional.
 
-### D8. Live feed
+### How we measure (identical for all runs)
 
-| Option | Notes |
-|---|---|
-| **OpenCV desktop tool** *(current)* | simplest, real FPS, also collects training frames |
-| streamlit-webrtc in the frontend | live video in the browser; WebRTC adds setup (TURN for remote use) |
-| WebSocket endpoint + JS client | lowest latency over the network, most custom code |
+Different box types can't be compared with box mAP, so the main metric is
+**task-level**, on **real photos only** (`tools/evaluate.py`):
 
-**Recommendation:** keep the OpenCV tool for development. Add streamlit-webrtc only if a
-live in-browser demo is a requirement.
+- **card precision / recall / F1**: is the predicted set of cards the true hand?
+- **exact-hand accuracy**: share of photos where *every* card is right
+- with and without telling the model the hand size (`--known-count`)
+- per-card recall and likely confusions (Under/Ober, 6–9, suits)
 
-### D9. Experiment tracking
+Box mAP on the synthetic validation split is reported as a secondary number.
 
-Ultralytics already writes metrics, plots and the confusion matrix to `runs/`. MLflow or
-Weights & Biases add comparison across runs. **Recommendation:** none for 30 h. Keep a short
-results table in the README per model version.
+## Code structure
 
-### D10. Deployment
+```
+src/jass_cv/
+  cards.py        36 classes (single source of truth)
+  geometry.py     card quad, corner region, homographies
+  synth.py        synthetic fanned-hand generator
+  dataset.py      annotation format + export to the 5 YOLO variants
+  detector.py     Detector interface: YoloDetector (upright + rotated), DummyDetector
+  hand.py         pick the hand (dedupe, top-N), diff two hands, score a hand
+  api/main.py     FastAPI: /predict, /predict/annotated, /hand/diff, /classes, /health
+  frontend/app.py Streamlit: hand view, "which card was played?"
+tools/
+  extract_cards.py            card photos → straightened faces
+  labelstudio_to_annotations.py
+  train.py                    YOLO training (local / Docker / Kaggle)
+  evaluate.py                 task-level evaluation on real photos
+  live_detect.py              live webcam dev tool
+labeling/label_studio_config.xml
+```
 
-Local `docker compose` only, or a hosted demo (Hugging Face Spaces, Render, a small VM)?
-This decides whether D7 (image size) and authentication matter.
+Principles that stay from the scaffold:
 
-## Possible extensions (out of scope for 30 h unless they matter)
+- The **`Detector` interface** is the only seam between model and apps.
+- **`cards.py` is the only place class ids are defined**; tests check the Label Studio
+  config against it.
+- The **frontend only talks to the API**. The dummy detector keeps the apps runnable
+  without a model.
 
-- Game logic: count the points of the detected cards for a chosen Trumpf / Obenabe / Undenufe.
-- Card tracking across video frames (stable ids, no flicker).
-- Detect duplicates/missing cards: "which cards of the deck haven't been seen?"
+## Known limitations / risks
+
+- **Synthetic vs real**: real hands have curved cards, real thumbs and fingers, glare and
+  motion blur. Experiment 1 measures how big this gap is; real background photos and hand
+  cut-outs (`data/hands/*.png`) are the main levers.
+- **Corner definition**: `CORNER_REGION` in `geometry.py` must be tuned to your deck
+  (`tools/extract_cards.py` draws it on every card for checking).
+- **Fan direction**: the generator assumes cards fanned left to right with each card on top
+  of the previous one (the top-left corner stays visible). Mirror it if one of you fans the
+  other way.
+- **Compute**: ~8–10 training runs. Use Kaggle for the experiments, local CPU for smoke tests.

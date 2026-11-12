@@ -20,9 +20,10 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from jass_cv import __version__
 from jass_cv.cards import CARDS
 from jass_cv.config import get_settings
-from jass_cv.detector import Detector, dedupe_by_card, load_detector
+from jass_cv.detector import Detector, load_detector
 from jass_cv.drawing import draw_detections
-from jass_cv.schemas import Detection, HealthResponse, PredictionResponse
+from jass_cv.hand import HandDiff, diff_hands, select_hand, sort_cards
+from jass_cv.schemas import Detection, HandDiffRequest, HealthResponse, PredictionResponse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,6 +42,9 @@ app = FastAPI(title="Jass Card Detection API", version=__version__, lifespan=lif
 Conf = Annotated[float | None, Query(ge=0, le=1, description="Confidence threshold")]
 Iou = Annotated[float | None, Query(ge=0, le=1, description="NMS IoU threshold")]
 Dedupe = Annotated[bool, Query(description="Keep only the best box per card (deck has no dupes)")]
+MaxCards = Annotated[
+    int | None, Query(ge=1, le=36, description="Cards in the hand, if known: keep the N best")
+]
 
 
 async def _read_image(file: UploadFile, max_mb: int) -> Image.Image:
@@ -56,7 +60,12 @@ async def _read_image(file: UploadFile, max_mb: int) -> Image.Image:
 
 
 async def _predict(
-    request: Request, file: UploadFile, conf: float | None, iou: float | None, dedupe: bool
+    request: Request,
+    file: UploadFile,
+    conf: float | None,
+    iou: float | None,
+    dedupe: bool,
+    max_cards: int | None,
 ) -> tuple[Image.Image, list[Detection], float]:
     settings = request.app.state.settings
     detector: Detector = request.app.state.detector
@@ -69,8 +78,8 @@ async def _predict(
         iou if iou is not None else settings.iou_threshold,
     )
     elapsed_ms = (time.perf_counter() - start) * 1000
-    if dedupe:
-        detections = dedupe_by_card(detections)
+    if dedupe or max_cards:
+        detections = select_hand(detections, max_cards)
     return image, detections, elapsed_ms
 
 
@@ -106,15 +115,16 @@ async def predict(
     conf: Conf = None,
     iou: Iou = None,
     dedupe: Dedupe = True,
+    max_cards: MaxCards = None,
 ) -> PredictionResponse:
-    image, detections, ms = await _predict(request, file, conf, iou, dedupe)
+    image, detections, ms = await _predict(request, file, conf, iou, dedupe, max_cards)
     return PredictionResponse(
         model=request.app.state.detector.name,
         image_width=image.width,
         image_height=image.height,
         inference_ms=round(ms, 1),
         detections=detections,
-        cards=[d.label for d in sorted(detections, key=lambda d: d.class_id)],
+        cards=sort_cards(d.label for d in detections),
     )
 
 
@@ -127,8 +137,15 @@ async def predict_annotated(
     conf: Conf = None,
     iou: Iou = None,
     dedupe: Dedupe = True,
+    max_cards: MaxCards = None,
 ) -> Response:
-    image, detections, _ = await _predict(request, file, conf, iou, dedupe)
+    image, detections, _ = await _predict(request, file, conf, iou, dedupe, max_cards)
     buf = io.BytesIO()
     draw_detections(image, detections).save(buf, format="JPEG", quality=90)
     return Response(buf.getvalue(), media_type="image/jpeg")
+
+
+@app.post("/hand/diff")
+def hand_diff(body: HandDiffRequest) -> HandDiff:
+    """Compare two hands, e.g. photos before and after playing a card."""
+    return diff_hands(body.before, body.after)

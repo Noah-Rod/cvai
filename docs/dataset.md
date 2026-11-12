@@ -1,9 +1,16 @@
-# Dataset & training
+# Data
+
+Three kinds of data. None of it is in git (see `data/README.md`).
+
+| Data | Used for | Effort |
+|---|---|---|
+| 36 card faces (`data/cards/`) | input of the generator | 36 photos + 1 command |
+| Synthetic hands (`data/synth/`) | training + validation | generated |
+| Real POV photos (`data/real/`) | **test** (all experiments) + a few for training (experiment 1) | photos + labeling |
 
 ## Classes
 
-36 classes = 4 suits × 9 ranks. Ids are fixed in `src/jass_cv/cards.py`, and
-`data/jass.yaml` must use the same order (a test checks this).
+36 classes = 4 suits × 9 ranks, ids fixed in `src/jass_cv/cards.py`:
 
 | id | label | | id | label | | id | label | | id | label |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -17,60 +24,110 @@
 | 7 | eicheln_koenig | | 16 | schilten_koenig | | 25 | rosen_koenig | | 34 | schellen_koenig |
 | 8 | eicheln_ass | | 17 | schilten_ass | | 26 | rosen_ass | | 35 | schellen_ass |
 
-Pairs we expect the model to confuse: **Under vs Ober** (same figure type; the suit symbol
-sits in a different place), **6 / 7 / 8 / 9** (same pip, different count), and suits under
-poor or coloured lighting.
+## 1. Card faces
 
-## Layout (YOLO format)
+1. Photograph each card **upright**, from straight above, on a dark, plain background, with
+   no glare. Name the file after the label: `rosen_ass.jpg`.
+2. `uv run --extra synth python tools/extract_cards.py --input photos/cards --out data/cards`
+3. Open `data/cards/_overview.jpg`. Every card should be straight and upright. The red box
+   should cover rank + suit symbol in the corner; if it doesn't, adjust `CORNER_REGION` (and
+   the card ratio `FACE_W/FACE_H`) in `src/jass_cv/geometry.py`.
 
-```
-data/
-  jass.yaml
-  raw/                         # original photos, never edited
-  jass/
-    images/{train,val,test}/IMG_0001.jpg
-    labels/{train,val,test}/IMG_0001.txt   # one line per box:
-                                           # <class_id> <cx> <cy> <w> <h>   (normalised 0..1)
-```
+Optional but valuable for realism:
 
-`data/` and `models/` are git-ignored. Where they are stored is an open decision
-(see [architecture.md](architecture.md#d6-data--model-storage)).
+- `data/backgrounds/`: 50–200 photos of what's behind a hand in POV (tables, floors, laps,
+  rooms). Your own phone photos are best.
+- `data/hands/`: a few RGBA PNG cut-outs of thumbs/hands (e.g. cut out with any
+  background-removal tool). Used as occluders instead of the default skin-coloured ellipse.
 
-## Labeling guidelines (draft — agree before labeling!)
-
-1. **Box = the visible part of the card face**, tight, axis-aligned. *(Alternative: box only
-   the corner region. That's decision D1.)*
-2. Label a card only if you yourself can tell which card it is; otherwise leave it unlabeled.
-3. Card backs are not labeled (or get their own class later, if we need that).
-4. Every card in the image is labeled. A missing box teaches the model "this is background".
-
-## Collecting data
-
-- Use `tools/live_detect.py` and press `s` to save frames to `captures/` (works with the
-  dummy model, so you can start before any model exists).
-- Vary everything: tables or tablecloths, lighting (daylight, lamp, phone flash), angle,
-  distance, rotation, partially covered cards, several decks if available, phone and webcam.
-- **Split by session, not by frame.** Frames from the same video are near-duplicates. If they
-  end up in both train and test, the test score will look far better than it really is.
-  Put whole capture sessions into train, val or test.
-- **The test set is real photos only**, even if training uses synthetic data.
-
-Rough target for a first model: ≥ 40 labeled instances per class in train
-(≈ 1,500 boxes total, many cards per photo), plus ~150 real photos for val and test.
-
-## Training
+## 2. Synthetic hands
 
 ```bash
-# smoke test (CPU, 1 epoch, 10 % of the data)
-docker compose --profile train run --rm train
-# real run on a GPU machine / Colab / Kaggle
-uv run --extra inference python tools/train.py --model yolo11n.pt --epochs 100 --device 0
+uv run --extra synth python -m jass_cv.synth --out data/synth/v1 --n 3000 --aug full
+# smoke test without card photos:
+uv run --extra synth python -m jass_cv.synth --out data/synth/smoke --n 50 --placeholder-cards
 ```
 
-`tools/train.py` fine-tunes a pretrained checkpoint. It turns off horizontal flips, because
-the card figures are not mirror-symmetric. It copies the best weights to `models/best.pt`,
-reports mAP on the test split, and with `--export onnx` writes an ONNX file. Runs, plots and
-the confusion matrix go to `runs/jass/`.
+Each image has 3–12 cards (`--min-cards/--max-cards`) fanned around a pivot, a random
+rotation, perspective, a thumb, and photometric augmentation (`--aug none|basic|full`).
+`--seed` makes it reproducible; `--workers` parallelises it (default: all cores but one).
 
-Metrics to report: mAP@50 and mAP@50-95 on **test**, the confusion matrix, per-class
-recall, and a handful of failure-case images.
+Every card in `annotations.jsonl` has:
+
+| Field | Meaning |
+|---|---|
+| `quad` | 4 corners of the full card (TL, TR, BR, BL as printed), also where hidden |
+| `corner_quad` | the rank/suit corner region |
+| `visible` | fraction of the card that is visible |
+| `corner_visible` | fraction of the corner that is visible |
+| `visible_bbox` | upright box of the visible pixels |
+| `layer` | 0 = bottom of the fan |
+
+**Look at the images before training** (open a few in `data/synth/v1/train/images`). Do they
+look like your real photos? That's the main lever for experiment 1.
+
+## 3. Export to YOLO (one dataset per box variant)
+
+```bash
+uv run --extra synth python -m jass_cv.dataset export --variant corner_obb \
+    --train data/synth/v1/train --val data/synth/v1/val --out data/exports/v1-corner_obb
+```
+
+Variants: `full_aabb`, `full_obb`, `visible_aabb`, `corner_aabb`, `corner_obb` (see
+[architecture.md](architecture.md#experiment-2-what-should-the-box-cover)). Cards whose
+corner is less than 60 % visible get no corner box (`--min-corner-visible`). Cards that are
+almost fully hidden (< 5 % visible) get no box at all (`--min-visible`).
+Images are hard-linked, not copied, so the five exports cost almost no disk space.
+
+For experiment 1, add real photos to training by repeating `--train`:
+`--train data/synth/v1/train --train data/real/train`.
+
+## 4. Real photos
+
+### Capture protocol
+
+- **Own POV**: hold the fan as you would in a game; phone at eye position.
+- Vary: number of cards (3–12), which cards, fan width, lighting (daylight, lamp, evening),
+  background, both of your hands, phone and webcam.
+- **Capture sessions**: one session = one place/light/person. **Split by session, not by
+  photo**: photos of the same session are near-duplicates, so a session goes completely into
+  train *or* test.
+- Target: **test ≈ 80–100 photos** (≥ 5 sessions), **real train ≈ 50 photos** (other sessions).
+
+### Test set: just write down the cards
+
+The evaluation only needs to know *which cards are in the hand*, not boxes. That's fast:
+
+```
+data/real/test/images/IMG_0001.jpg ...
+data/real/test/hands.csv
+  file,cards
+  IMG_0001.jpg,rosen_ass rosen_6 eicheln_under schellen_koenig schilten_9
+```
+
+Tip: lay the hand on the table, take a top-down photo for reference, then fan it and take
+the POV photo.
+
+### Real training photos (experiment 1): Label Studio
+
+```bash
+docker compose --profile label up -d labelstudio      # http://localhost:8080
+```
+
+1. Create a project and paste `labeling/label_studio_config.xml` under
+   *Settings → Labeling Interface → Code*.
+2. Import the photos. Rotate phone photos to their final orientation first (EXIF rotation),
+   so the coordinates match.
+3. For each card, click the 4 corners **top-left, top-right, bottom-right, bottom-left as
+   printed on the card**, including estimated hidden corners. Choose the card label.
+4. Export as **JSON**, then:
+
+```bash
+uv run --extra synth python tools/labelstudio_to_annotations.py \
+    --export export.json --images photos/real/train --out data/real/train
+```
+
+The corner box is computed from the outline, so these photos work for every box variant
+except `visible_aabb`. *The converter hasn't been tested against a real Label Studio export
+yet: check the first conversion by drawing it (see `tests/test_synth_dataset.py` for the
+format).*

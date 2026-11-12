@@ -26,6 +26,10 @@ api = [
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
 ]
+# synthetic data generator, dataset export, card extraction (no torch)
+synth = [
+    "opencv-python>=4.9",
+]
 frontend = [
     "streamlit>=1.50",
     "requests>=2.32",
@@ -36,6 +40,7 @@ live = [
     "requests>=2.32",
 ]
 dev = [
+    "opencv-python>=4.9",
     "fastapi>=0.115",
     "python-multipart>=0.0.9",
     "httpx>=0.27",
