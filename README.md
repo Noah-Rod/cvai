@@ -25,11 +25,14 @@ weights the API uses a *dummy* detector that returns one fake card.
 ## Quickstart: app (Docker Desktop)
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+make start
 ```
 
 Frontend <http://localhost:8501> · API docs <http://localhost:8000/docs>
+
+Stop the app with `make stop`. Other useful commands are `make status`, `make logs`, and
+`make restart`. Docker Compose reads `.env` when present; all environment variables are
+optional. The Makefile requires GNU Make and Docker Compose.
 
 To use a trained model, set `JASS_MODEL_PATH=models/<name>.pt` in `.env` and run
 `docker compose restart api`.
