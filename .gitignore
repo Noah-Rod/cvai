@@ -7,9 +7,7 @@ __pycache__/
 *.egg-info/
 dist/
 
-# Data & model artefacts are not versioned in git (see docs/architecture.md, "data versioning")
-data/*
-!data/README.md
+# Model artefacts are not versioned in git (see docs/architecture.md, "data versioning")
 models/*
 !models/README.md
 runs/
