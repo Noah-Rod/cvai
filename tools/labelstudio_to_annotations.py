@@ -77,7 +77,8 @@ def main() -> None:
                     raise ValueError("polygon dimensions differ within the same image")
                 if actual_size != (w, h):
                     raise ValueError(
-                        f"Label Studio image size {w}x{h} differs from source {actual_size[0]}x{actual_size[1]}"
+                        f"Label Studio image size {w}x{h} differs from source "
+                        f"{actual_size[0]}x{actual_size[1]}"
                     )
                 size = (w, h)
                 label = labels[0]
