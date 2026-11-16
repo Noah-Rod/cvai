@@ -1,6 +1,7 @@
 # Data
 
-Three kinds of data. None of it is in git (see `data/README.md`).
+Three kinds of data. Card photos are in git; generated data (`data/synth/`, `data/exports/`) is
+git-ignored (see `data/README.md`).
 
 | Data | Used for | Effort |
 |---|---|---|
