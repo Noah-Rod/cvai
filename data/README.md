@@ -1,6 +1,7 @@
 # data/
 
-Not versioned in git (see docs/dataset.md). Layout:
+Card photos (`cards/`, `processed-cards/`) are in git. Generated data (`synth/`, `exports/`)
+is git-ignored: it is reproducible from the cards and a seed. Layout (see docs/dataset.md):
 
 ```
 data/

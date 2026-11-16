@@ -24,7 +24,7 @@ The project is a small **study** with an app as its demo:
 | D6 | Training compute | Same `tools/train.py` locally on Windows (CPU, slow) **or on Kaggle (free GPU)** | No GPU available; experiments need ~8 runs |
 | D7 | Serving | PyTorch inside the API, local only | No deployment, so image size doesn't matter |
 | D8 | Live view | OpenCV desktop tool now; in-browser live view is a stretch goal | Browser live view is nice-to-have |
-| D9 | Data & weights storage | Not in git: shared drive for `data/cards`, `data/real`; weights as GitHub Release assets | Generated data is reproducible from cards + seed |
+| D9 | Data & weights storage | Card photos in git; generated data (`data/synth`, `data/exports`) git-ignored; weights as GitHub Release assets | Card photos are small and needed by everyone; generated data is reproducible from cards + seed |
 | D10 | Deliverables | Live demo + final presentation | |
 
 ## Pipeline

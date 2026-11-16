@@ -7,6 +7,10 @@ __pycache__/
 *.egg-info/
 dist/
 
+# Generated data is reproducible from data/cards + seed; never commit it
+data/synth/
+data/exports/
+
 # Model artefacts are not versioned in git (see docs/architecture.md, "data versioning")
 models/*
 !models/README.md
