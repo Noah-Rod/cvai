@@ -133,8 +133,9 @@ Principles that stay from the scaffold:
 - **Synthetic vs real**: real hands have curved cards, real thumbs and fingers, glare and
   motion blur. Experiment 1 measures how big this gap is; real background photos and hand
   cut-outs (`data/hands/*.png`) are the main levers.
-- **Corner definition**: `CORNER_REGION` in `geometry.py` must be tuned to your deck
-  (`tools/extract_cards.py` draws it on every card for checking).
+- **Corner definition**: `CORNER_REGION` in `geometry.py` is tuned to our deck with
+  `tools/corner_region_report.py` (see [dataset.md](dataset.md#corner-region)). Under, Banner
+  and Ass show little that identifies them in the top-left corner.
 - **Fan direction**: the generator assumes cards fanned left to right with each card on top
   of the previous one (the top-left corner stays visible). Mirror it if one of you fans the
   other way.

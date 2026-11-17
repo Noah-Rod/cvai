@@ -38,6 +38,42 @@ git-ignored (see `data/README.md`).
    should cover rank + suit symbol in the corner; if it doesn't, adjust `CORNER_REGION` (and
    the card ratio `FACE_W/FACE_H`) in `src/jass_cv/geometry.py`.
 
+### Corner region
+
+`CORNER_REGION = (0.0, 0.0, 0.20, 0.42)` (fractions of the face) was picked with
+
+```bash
+uv run --extra synth python tools/corner_region_report.py --n 300
+```
+
+which measures two things per candidate box: how far each card's corner crop is from the
+closest other card's (RMS pixel distance, higher = easier to tell apart) and how many corners
+stay at least 60 % visible in synthetic fans (the threshold the `corner_*` exports use).
+Excerpt (300 synthetic hands, real faces):
+
+| Box (w × h) | closest pair | mean nearest-neighbour | corners visible |
+|---|---|---|---|
+| 0.24 × 0.24 (old default) | 0.036 Eicheln Under ~ Schilten Under | 0.087 | 84.6 % |
+| 0.20 × 0.36 | 0.044 Eicheln Under ~ Rosen Under | 0.088 | 89.4 % |
+| **0.20 × 0.42 (chosen)** | 0.050 Eicheln Under ~ Rosen Under | 0.089 | 87.6 % |
+| 0.24 × 0.42 | 0.055 Schellen 8 ~ Schellen 9 | 0.094 | 76.7 % |
+| 0.30 × 0.36 | 0.051 Schellen 8 ~ Schellen 9 | 0.095 | 63.8 % |
+
+Width is expensive: each card in a fan covers the right side of the card below it, so a
+wider box is hidden much sooner. Height is cheap and adds the suit symbol below the index.
+The chosen box beats the old default on both measures
+([before/after on synthetic hands](img/corner-before-after.jpg): green = corner ≥ 60 % visible,
+red = dropped from the corner labels). The price: upright boxes
+(`corner_aabb`) of neighbouring cards overlap more (mean IoU 0.20 → 0.30). That does not hurt
+detection, because non-maximum suppression is per class and two cards in a hand never share a
+class.
+
+Expected weak spots of the corner variants (worth a slide in experiment 2):
+- **Under**: the corner shows "UN…" and, on Eicheln/Rosen Under, almost nothing of the suit.
+- **Banner**: "10" plus part of the banner; the suit symbol is often only partly inside.
+- **Ass**: no rank index at all, only ornament.
+- **Schellen 8 vs 9** (and other neighbouring numbers): only the index digit differs.
+
 Optional but valuable for realism:
 
 - `data/backgrounds/`: 50–200 photos of what's behind a hand in POV (tables, floors, laps,
