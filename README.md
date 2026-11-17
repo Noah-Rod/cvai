@@ -45,7 +45,7 @@ To use a trained model, set `JASS_MODEL_PATH=models/<name>.pt` in `.env` and run
 uv run --extra synth python -m jass_cv.synth --out data/synth/smoke --n 200
 # 2. YOLO dataset for one box variant
 uv run --extra synth python -m jass_cv.dataset export --variant corner_obb --train data/synth/smoke/train --val data/synth/smoke/val --out data/exports/smoke-corner_obb
-# 3. train (CPU smoke test; real runs on Kaggle, see docs/training.md)
+# 3. train (CPU smoke test; real runs on the GPU hub, see docs/training.md)
 uv run --extra inference python tools/train.py --data data/exports/smoke-corner_obb/data.yaml --model yolo11n-obb.pt --name smoke --epochs 3
 # 4. evaluate on real photos
 uv run --extra inference python tools/evaluate.py --weights models/smoke.pt --images data/real/test/images --hands data/real/test/hands.csv
@@ -73,6 +73,6 @@ docker compose watch          # hot reload of src/ into the containers
 
 - [Architecture, decisions & experiments](docs/architecture.md)
 - [Data: card faces, synthetic hands, real photos, labeling](docs/dataset.md)
-- [Training on Windows or Kaggle](docs/training.md)
+- [Training on a laptop, the GPU hub or Kaggle](docs/training.md)
 - [API reference](docs/api.md)
 - [Project plan, 2 × 15 h](docs/project-plan.md)

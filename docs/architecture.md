@@ -21,7 +21,7 @@ The project is a small **study** with an app as its demo:
 | D3 | Training data | **Synthetic** (own generator) + a few real photos | Labels for free, any amount; the generator is our own CV work |
 | D4 | Labeling | **Label Studio, self-hosted** (`docker compose --profile label`) | Only needed for the small real set; data stays local |
 | D5 | Model | Ultralytics YOLO11n (upright boxes) / YOLO11n-obb (rotated boxes) | Fast path, both box types, same code; AGPL is fine for a course project |
-| D6 | Training compute | Same `tools/train.py` locally on Windows (CPU, slow) **or on Kaggle (free GPU)** | No GPU available; experiments need ~8 runs |
+| D6 | Training compute | Same `tools/train.py` locally on Windows (CPU, slow) **or on the school GPU hub** (JupyterHub), driven by `tools/run_experiments.py`; Kaggle as fallback | No GPU in the laptops; experiments need ~8 runs; the hub has no weekly quota and needs no dataset uploads |
 | D7 | Serving | PyTorch inside the API, local only | No deployment, so image size doesn't matter |
 | D8 | Live view | OpenCV desktop tool now; in-browser live view is a stretch goal | Browser live view is nice-to-have |
 | D9 | Data & weights storage | Card photos in git; generated data (`data/synth`, `data/exports`) git-ignored; weights as GitHub Release assets | Card photos are small and needed by everyone; generated data is reproducible from cards + seed |
@@ -43,7 +43,7 @@ flowchart LR
     subgraph exp["Experiments (person B)"]
         ann --> export["jass_cv.dataset export<br/>5 box variants"]
         realann --> export
-        export --> train["tools/train.py<br/>(local or Kaggle)"]
+        export --> train["tools/train.py<br/>(local or GPU hub)"]
         train --> weights[("models/*.pt")]
         weights --> eval["tools/evaluate.py<br/>card P/R/F1 · exact-hand accuracy"]
         csv --> eval
@@ -113,8 +113,10 @@ src/jass_cv/
   frontend/app.py Streamlit: hand view, "which card was played?"
 tools/
   extract_cards.py            card photos → straightened faces
+  corner_region_report.py     compare corner regions (distinctiveness vs visibility)
   labelstudio_to_annotations.py
-  train.py                    YOLO training (local / Docker / Kaggle)
+  train.py                    YOLO training (local / Docker / GPU hub / Kaggle)
+  run_experiments.py          all experiment runs: generate → export → train → evaluate
   evaluate.py                 task-level evaluation on real photos
   live_detect.py              live webcam dev tool
 labeling/label_studio_config.xml
@@ -139,4 +141,4 @@ Principles that stay from the scaffold:
 - **Fan direction**: the generator assumes cards fanned left to right with each card on top
   of the previous one (the top-left corner stays visible). Mirror it if one of you fans the
   other way.
-- **Compute**: ~8–10 training runs. Use Kaggle for the experiments, local CPU for smoke tests.
+- **Compute**: ~8–10 training runs. Use the GPU hub for the experiments, local CPU for smoke tests.
