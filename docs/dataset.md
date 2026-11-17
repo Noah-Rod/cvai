@@ -32,8 +32,8 @@ git-ignored (see `data/README.md`).
    Schilten, `R` = Rosen, `G` = Schellen. Rank codes: `6`, `7`, `8`, `9`, `B` = Banner,
    `U` = Under, `O` = Ober, `K` = König, `A` = Ass. For example, `image_SU.jpg` is
    Schellen Under and `image_EA.jpg` is Eicheln Ass. The extractor writes standard label
-   names such as `data/cards/schellen_under.png`.
-2. `uv run --extra synth python tools/extract_cards.py --input photos/cards --out data/cards`
+   names such as `data/cards/schellen_under.png`. Keep the photos in `data/raw-cards/`.
+2. `uv run --extra synth python tools/extract_cards.py --input data/raw-cards --out data/cards`
 3. Open `data/cards/_overview.jpg`. Every card should be straight and upright. The red box
    should cover rank + suit symbol in the corner; if it doesn't, adjust `CORNER_REGION` (and
    the card ratio `FACE_W/FACE_H`) in `src/jass_cv/geometry.py`.
