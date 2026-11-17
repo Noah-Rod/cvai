@@ -74,6 +74,13 @@ The two experiments share data: exp2 trains the four box variants on the same sy
 hands, and exp1's "aug full" run *is* the exp2 run of that variant, so it isn't trained twice.
 Single runs also work: `python tools/run_experiments.py exp2-corner_obb`.
 
+**Model size.** Runs use YOLO11n by default. `--size s` (YOLO11s, ~3x the parameters, often
+better on small details such as the index digit) trains the same run as
+`<run>-yolo11s` on the same exported data; `--summary` lists it under the n run. A cheap
+extra comparison for the best variant:
+`nohup python tools/run_experiments.py exp2-corner_obb --size s > size.log 2>&1 &`.
+Expect roughly 2x the training time; lower `--batch` if the GPU runs out of memory.
+
 **Interrupted?** JupyterHubs stop servers that are idle or have run too long. Start the
 server again and repeat the same command: finished steps are skipped and a training continues
 from its last epoch.

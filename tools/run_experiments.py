@@ -4,6 +4,7 @@
   python tools/run_experiments.py exp2                       # the 4 box variants
   python tools/run_experiments.py exp1 --variant corner_obb  # training data, best variant
   python tools/run_experiments.py exp2-corner_obb            # a single run
+  python tools/run_experiments.py exp2-corner_obb --size s   # same run with YOLO11s
   python tools/run_experiments.py --summary                  # results tables (markdown)
 
 Each run: generate synthetic hands → export one box variant → train → evaluate on the real
@@ -11,6 +12,10 @@ test set (data/real/test, with and without the known card count). Every step is 
 its output exists, so the same command resumes after an interruption; an interrupted training
 continues from its last epoch. Runs that share data share it (all exp2 runs use the same
 synthetic hands; `exp1` with `--aug full` is the matching exp2 run).
+
+`--size` picks the YOLO11 model size (n = nano, the default; s = small, ~3x the parameters;
+m = medium). Runs with a size other than n get a `-yolo11<size>` suffix, so their results
+sit next to the n runs and both share the same exported dataset.
 
 Outputs: data/synth/, data/exports/, models/<run>.pt, runs/<run>/ (training plots, val
 metrics), runs/eval/<run>[-known].json.
@@ -24,7 +29,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +39,7 @@ from jass_cv.dataset import VARIANTS  # noqa: E402
 
 SYNTH_N = 3000
 BOX_VARIANTS = ("full_aabb", "full_obb", "corner_aabb", "corner_obb")  # experiment 2
+SIZES = ("n", "s", "m")  # YOLO11 model sizes
 REAL_TRAIN = ROOT / "data" / "real" / "train"
 REAL_TEST = ROOT / "data" / "real" / "test"
 
@@ -44,10 +50,22 @@ class Run:
     variant: str
     aug: str = "full"
     real: int = 0  # number of real training photos added to the synthetic ones
+    size: str = "n"  # YOLO11 model size
 
     @property
     def model(self) -> str:
-        return "yolo11n-obb.pt" if self.variant.endswith("_obb") else "yolo11n.pt"
+        return f"yolo11{self.size}{'-obb' if self.variant.endswith('_obb') else ''}.pt"
+
+    @property
+    def data_key(self) -> str:
+        """Name of the exported dataset: runs that train on the same data share it."""
+        return f"v1-{self.variant}-aug_{self.aug}" + (f"-real{self.real}" if self.real else "")
+
+
+def sized(run: Run, size: str) -> Run:
+    """The same run with another model size (n keeps the plain name)."""
+    base = run.name.removesuffix(f"-yolo11{run.size}")
+    return replace(run, size=size, name=base if size == "n" else f"{base}-yolo11{size}")
 
 
 def exp2_runs() -> list[Run]:
@@ -65,7 +83,7 @@ def all_runs(variant: str) -> dict[str, Run]:
     return {r.name: r for r in exp2_runs() + exp1_runs(variant)}
 
 
-def select(targets: list[str], variant: str) -> list[Run]:
+def select(targets: list[str], variant: str, size: str = "n") -> list[Run]:
     runs, known = [], all_runs(variant)
     for t in targets:
         if t == "exp2":
@@ -76,7 +94,7 @@ def select(targets: list[str], variant: str) -> list[Run]:
             runs.append(known[t])
         else:
             raise SystemExit(f"unknown run {t!r}; see --list")
-    return list(dict.fromkeys(runs))  # keep order, drop duplicates
+    return list(dict.fromkeys(sized(r, size) for r in runs))  # keep order, drop duplicates
 
 
 # ---------------------------------------------------------------------------- environment
@@ -149,7 +167,7 @@ def real_subset(n: int) -> Path:
 
 
 def ensure_export(run: Run, workers: int) -> Path:
-    data_yaml = ROOT / "data" / "exports" / run.name / "data.yaml"
+    data_yaml = ROOT / "data" / "exports" / run.data_key / "data.yaml"
     if data_yaml.exists():
         return data_yaml
     synth = ensure_synth(run.aug, workers)
@@ -206,7 +224,13 @@ def eval_result(run_name: str, known: bool = False) -> dict | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def has_results(run: Run) -> bool:
+    return (ROOT / "models" / f"{run.name}.pt").exists() or eval_result(run.name) is not None
+
+
 def summary_table(runs: list[Run]) -> str:
+    """One row per run, plus the same run in other model sizes once those have results."""
+
     def fmt(v):
         return "" if v is None else f"{v:.3f}"
 
@@ -214,7 +238,10 @@ def summary_table(runs: list[Run]) -> str:
         "| Run | card F1 | exact-hand acc. | exact-hand acc. (known count) | val mAP50 |",
         "|---|---|---|---|---|",
     ]
+    rows = []
     for r in runs:
+        rows += [r] + [sized(r, z) for z in SIZES if z != r.size and has_results(sized(r, z))]
+    for r in dict.fromkeys(rows):
         ev, known = eval_result(r.name), eval_result(r.name, known=True)
         lines.append(
             f"| {r.name} | {fmt(ev and ev['card_f1'])} | {fmt(ev and ev['exact_hand_accuracy'])}"
@@ -231,6 +258,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("targets", nargs="*", help="exp1, exp2 or run names (see --list)")
     ap.add_argument("--variant", default="corner_obb", choices=VARIANTS,
                     help="box variant for exp1 (the winner of exp2)")  # fmt: skip
+    ap.add_argument("--size", default="n", choices=SIZES,
+                    help="YOLO11 model size: n (default), s, m")  # fmt: skip
     ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--batch", type=int, default=16, help="-1 = let Ultralytics pick for the GPU")
     ap.add_argument("--imgsz", type=int, default=640)
@@ -247,16 +276,16 @@ def main(argv: list[str] | None = None) -> None:
             if args.summary:
                 print(summary_table(runs))
             else:
-                for r in runs:
+                for r in (sized(r, args.size) for r in runs):
                     done = (ROOT / "models" / f"{r.name}.pt").exists()
-                    print(f"  {'done' if done else '    '}  {r.name:32s} {r.variant:12s} "
+                    print(f"  {'done' if done else '    '}  {r.name:40s} {r.variant:12s} "
                           f"aug={r.aug:5s} real={r.real}")  # fmt: skip
         return
     if not args.targets:
         ap.error("name exp1, exp2 or a run (see --list)")
 
     args.device = args.device or default_device()
-    runs = select(args.targets, args.variant)
+    runs = select(args.targets, args.variant, args.size)
     print(f"device={args.device} workers={args.workers} runs: {', '.join(r.name for r in runs)}")
     for i, run in enumerate(runs, start=1):
         print(f"\n=== [{i}/{len(runs)}] {run.name} ===", flush=True)

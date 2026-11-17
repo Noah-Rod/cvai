@@ -69,3 +69,32 @@ def test_summary_reads_eval_and_validation_results(tmp_path, monkeypatch):
     table = rx.summary_table(rx.exp2_runs())
     assert "| exp2-full_obb | 0.800 | 0.500 | 0.700 | 0.650 |" in table
     assert "| exp2-full_aabb |  |  |  |  |" in table
+
+
+def test_model_size_changes_checkpoint_and_name_but_not_data():
+    run = rx.Run("exp2-corner_obb", "corner_obb")
+    small = rx.sized(run, "s")
+    assert small.name == "exp2-corner_obb-yolo11s" and small.model == "yolo11s-obb.pt"
+    assert small.data_key == run.data_key  # n and s train on the same exported dataset
+    assert rx.sized(small, "n") == run
+    assert rx.sized(rx.Run("exp2-full_aabb", "full_aabb"), "m").model == "yolo11m.pt"
+    assert [r.name for r in rx.select(["exp2-full_obb"], "corner_obb", "s")] == [
+        "exp2-full_obb-yolo11s"
+    ]
+
+
+def test_exp1_full_augmentation_shares_the_exp2_dataset():
+    keys = {r.name: r.data_key for r in rx.exp1_runs("corner_obb")}
+    assert keys["exp2-corner_obb"] == "v1-corner_obb-aug_full"
+    assert keys["exp1-corner_obb-real20"] == "v1-corner_obb-aug_full-real20"
+    assert len(set(keys.values())) == len(keys)
+
+
+def test_summary_adds_other_sizes_once_they_have_results(tmp_path, monkeypatch):
+    monkeypatch.setattr(rx, "ROOT", tmp_path)
+    (tmp_path / "models").mkdir()
+    table = rx.summary_table(rx.exp2_runs())
+    assert "yolo11s" not in table
+    (tmp_path / "models" / "exp2-corner_obb-yolo11s.pt").write_bytes(b"")
+    rows = [line.split(" | ")[0] for line in rx.summary_table(rx.exp2_runs()).splitlines()]
+    assert rows.index("| exp2-corner_obb-yolo11s") == rows.index("| exp2-corner_obb") + 1
