@@ -18,9 +18,10 @@ Course project (CV/AI, 2 people × ~15 h) built as a small study:
 | **Live-feed dev tool** | OpenCV window on webcam/video, local model or via the API | `tools/live_detect.py` |
 | **Labeling** | Label Studio (self-hosted) for the real photos | `labeling/`, compose profile `label` |
 
-**Status:** pipeline complete and tested end to end with placeholder cards. Next: real card
-photos and real test photos (see the [project plan](docs/project-plan.md)). Without trained
-weights the API uses a *dummy* detector that returns one fake card.
+**Status:** pipeline complete; the 36 real card faces are in `data/cards/` and the corner
+region is tuned to them. Next: real test photos and a first synthetic-only baseline (see the
+[project plan](docs/project-plan.md)). Without trained weights the API uses a *dummy* detector
+that returns one fake card.
 
 ## Quickstart: app (Docker Desktop)
 
@@ -40,8 +41,8 @@ To use a trained model, set `JASS_MODEL_PATH=models/<name>.pt` in `.env` and run
 ## Quickstart: data & training (Windows / Linux / macOS, with uv)
 
 ```bash
-# 1. synthetic hands (placeholder faces until you have real card photos)
-uv run --extra synth python -m jass_cv.synth --out data/synth/smoke --n 200 --placeholder-cards
+# 1. synthetic hands from the real card faces in data/cards/
+uv run --extra synth python -m jass_cv.synth --out data/synth/smoke --n 200
 # 2. YOLO dataset for one box variant
 uv run --extra synth python -m jass_cv.dataset export --variant corner_obb --train data/synth/smoke/train --val data/synth/smoke/val --out data/exports/smoke-corner_obb
 # 3. train (CPU smoke test; real runs on Kaggle, see docs/training.md)

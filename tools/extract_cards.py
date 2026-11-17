@@ -6,7 +6,7 @@ no flash glare. Name each photo `image_<suit><rank>.jpg`: suits E=Eicheln, S=Sch
 R=Rosen, G=Schellen; ranks 6, 7, 8, 9, B=Banner, U=Under, O=Ober, K=König, A=Ass.
 For example, `image_SU.jpg` is Schellen Under and `image_EA.jpg` is Eicheln Ass. Then:
 
-  python tools/extract_cards.py --input photos/cards --out data/cards
+  python tools/extract_cards.py --input data/raw-cards --out data/cards
 
 The tool finds the card outline (largest 4-cornered contour), straightens it with a
 perspective warp and saves `data/cards/<label>.png`. It also writes `_overview.jpg` with the

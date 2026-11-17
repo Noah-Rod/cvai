@@ -14,8 +14,10 @@ import numpy as np
 FACE_W, FACE_H = 360, 568
 
 # Region in the top-left corner that shows rank + suit, as fractions (x0, y0, x1, y1) of the
-# face. Tune this to your deck (look at a few cards and check the box in the generated images).
-CORNER_REGION = (0.0, 0.0, 0.24, 0.24)
+# face. Tuned on the real deck with tools/corner_region_report.py: a narrow, tall strip keeps
+# the index plus the suit symbol below it and stays visible in a fan (wider boxes are covered
+# by the next card much sooner than taller ones). See docs/dataset.md.
+CORNER_REGION = (0.0, 0.0, 0.20, 0.42)
 
 
 def face_rect() -> np.ndarray:
