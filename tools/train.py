@@ -35,29 +35,47 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--fraction", type=float, default=1.0, help="use a fraction of the train set")
     ap.add_argument("--export", choices=["onnx"], help="also export the best model")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue runs/<name> from its last epoch if it was interrupted",
+    )
     args = ap.parse_args()
 
     from ultralytics import YOLO
 
-    model = YOLO(args.model)
-    model.train(
-        data=str(args.data.resolve()),
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=args.device,
-        workers=args.workers,
-        fraction=args.fraction,
-        project=str(ROOT / "runs"),
-        name=args.name,
-        exist_ok=True,
-        # Card faces are not mirror-symmetric; the generator already varies rotation/perspective.
-        fliplr=0.0,
-        degrees=5.0,
-    )
+    weights_dir = ROOT / "runs" / args.name / "weights"
+    if args.resume and (weights_dir / "last.pt").exists():
+        print(f"Resuming runs/{args.name} from {weights_dir / 'last.pt'}")
+        model = YOLO(weights_dir / "last.pt")
+        try:
+            model.train(resume=True)
+            best = Path(model.trainer.best)
+        except AssertionError as e:  # Ultralytics: "... is finished, nothing to resume"
+            print(e)
+            best = weights_dir / "best.pt"
+    else:
+        model = YOLO(args.model)
+        model.train(
+            data=str(args.data.resolve()),
+            epochs=args.epochs,
+            imgsz=args.imgsz,
+            batch=args.batch,
+            device=args.device,
+            workers=args.workers,
+            fraction=args.fraction,
+            project=str(ROOT / "runs"),
+            name=args.name,
+            exist_ok=True,
+            # Card faces are not mirror-symmetric; the generator already varies rotation and
+            # perspective.
+            fliplr=0.0,
+            degrees=5.0,
+        )
+        best = Path(model.trainer.best)
     dest = ROOT / "models" / f"{args.name}.pt"
     dest.parent.mkdir(exist_ok=True)
-    shutil.copy(model.trainer.best, dest)
+    shutil.copy(best, dest)
     print(f"Best weights → {dest}   (plots and metrics: runs/{args.name}/)")
 
     if args.export:

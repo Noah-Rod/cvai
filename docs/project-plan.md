@@ -19,7 +19,7 @@ Label Studio setup. So the hours go into **data, experiments and analysis**, not
 | 2 | Generator realism: background photos, thumb/hand cut-outs, compare synthetic vs real side by side, fix what looks off | 3.5 h | – |
 | 3 | Real photos: test sessions + `hands.csv` (both), real-train sessions | 2 h | 2 h |
 | 4 | Label ~50 real training photos in Label Studio, convert, check the conversion | 1 h | 2 h |
-| 5 | Kaggle notebook working end to end (generate → export → train → download weights) | – | 1.5 h |
+| 5 | GPU hub set up, `tools/run_experiments.py` end to end (generate → export → train → evaluate → download) | – | 1.5 h |
 | 6 | Experiment 2: train 4 box variants, evaluate on real test, pick the winner | – | 3 h |
 | 7 | Experiment 1: aug none/basic/full, + 20 / + 50 real photos | 3 h | – |
 | 8 | Error analysis: confusions, failure gallery, effect of known hand size | 1 h | 1.5 h |
@@ -27,8 +27,8 @@ Label Studio setup. So the hours go into **data, experiments and analysis**, not
 | 10 | Presentation: slides, results tables/plots, rehearsal | 2 h | 1.5 h |
 | | **Total** | **15 h** | **15 h** |
 
-Training runs: about 4 (exp. 2) + 4 (exp. 1, one shared) = **~8 runs**, each ~30–60 min on a
-Kaggle GPU (estimate). Start them early and let them run while you do other tasks.
+Training runs: about 4 (exp. 2) + 4 (exp. 1, one shared) = **~8 runs**, each ~30–60 min on
+the GPU hub (estimate). Start them early and let them run while you do other tasks.
 
 ## Milestones
 
@@ -66,6 +66,6 @@ Experiment 1: training data (best variant):
 | Risk | Mitigation |
 |---|---|
 | Synthetic images look too different from real ones → poor transfer | real backgrounds + hand cut-outs; add real photos (that's experiment 1) |
-| Training too slow on the laptops | Kaggle GPU; local only for smoke tests |
+| Training too slow on the laptops | GPU hub (Kaggle as fallback); local only for smoke tests |
 | Corner region ambiguous for some cards | that's a finding for experiment 2; full-card variants as fallback |
 | Test score too optimistic | split by capture session |
