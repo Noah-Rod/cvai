@@ -114,7 +114,9 @@ src/jass_cv/
 tools/
   extract_cards.py            card photos → straightened faces
   corner_region_report.py     compare corner regions (distinctiveness vs visibility)
-  labelstudio_to_annotations.py
+  labelstudio_to_annotations.py  Label Studio JSON export → annotations.jsonl (+ previews)
+  label_hands.py              Streamlit page: tick the cards per test photo → hands.csv
+  compare_synth_real.py       synthetic vs real: contact sheet + image statistics
   train.py                    YOLO training (local / Docker / GPU hub / Kaggle)
   run_experiments.py          all experiment runs: generate → export → train → evaluate
   evaluate.py                 task-level evaluation on real photos

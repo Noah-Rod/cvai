@@ -137,7 +137,7 @@ For experiment 1, add real photos to training by repeating `--train`:
 
 ### Test set: just write down the cards
 
-The evaluation only needs to know *which cards are in the hand*, not boxes. That's fast:
+The evaluation only needs to know *which cards are in the hand*, not boxes:
 
 ```
 data/real/test/images/IMG_0001.jpg ...
@@ -146,8 +146,19 @@ data/real/test/hands.csv
   IMG_0001.jpg,rosen_ass rosen_6 eicheln_under schellen_koenig schilten_9
 ```
 
-Tip: lay the hand on the table, take a top-down photo for reference, then fan it and take
-the POV photo.
+Don't type it: tick the cards per photo in a small page that writes `hands.csv` for you.
+
+```bash
+uv run --extra frontend streamlit run tools/label_hands.py -- --images data/real/test/images
+```
+
+Every click is saved. **Copy previous photo** starts from the previous photo's cards, so in a
+"photo → play a card → photo" sequence you only untick the played card, and the page shows
+which card was played since the previous photo (a quick check that you didn't mistype).
+
+Tips: lay the hand on the table and take a top-down photo for reference, then fan it and take
+the POV photo. On an iPhone set *Settings → Camera → Formats → Most Compatible* so photos are
+JPEG, not HEIC.
 
 ### Real training photos (experiment 1): Label Studio
 
@@ -157,18 +168,38 @@ docker compose --profile label up -d labelstudio      # http://localhost:8080
 
 1. Create a project and paste `labeling/label_studio_config.xml` under
    *Settings → Labeling Interface → Code*.
-2. Import the photos. Rotate phone photos to their final orientation first (EXIF rotation),
-   so the coordinates match.
+2. Import the photos as they come from the phone (no need to rotate them: the converter
+   applies the EXIF orientation, like Label Studio does when it shows them).
 3. For each card, click the 4 corners **top-left, top-right, bottom-right, bottom-left as
    printed on the card**, including estimated hidden corners. Choose the card label.
-4. Export as **JSON**, then:
+4. Export as **JSON** (not JSON-MIN), then:
 
 ```bash
 uv run --extra synth python tools/labelstudio_to_annotations.py \
-    --export export.json --images photos/real/train --out data/real/train
+    --export export.json --images photos/real/train --out data/real/train \
+    --preview data/real/train-preview
 ```
 
+Open a few images in `data/real/train-preview/`: every card outline is drawn in its suit
+colour, the corner box in white and a dot on the corner you clicked first (it must be the
+card's printed top-left corner). Photos are written upright to `data/real/train/images/`.
+
 The corner box is computed from the outline, so these photos work for every box variant
-except `visible_aabb`. *The converter hasn't been tested against a real Label Studio export
-yet: check the first conversion by drawing it (see `tests/test_synth_dataset.py` for the
-format).*
+except `visible_aabb`. The converter is tested against an export built like Label Studio's
+(`tests/test_labelstudio.py`: upload prefixes, local-storage paths, sideways phone photos,
+cancelled annotations); do the preview check on your first real export anyway.
+
+### Realism check: synthetic vs real
+
+Once you have some real photos, compare them with the synthetic hands:
+
+```bash
+uv run --extra synth python tools/compare_synth_real.py \
+    --real data/real/test/images --synth data/synth/v1-aug_full --out runs/compare
+```
+
+`runs/compare/sheet.jpg` puts both side by side; `runs/compare/report.md` compares
+brightness, contrast, saturation, sharpness and colour cast and says what to change in the
+augmentation (`HandGenerator.photometric` in `src/jass_cv/synth.py`) where the real photos
+fall outside the middle 80 % of the synthetic ones. Backgrounds, thumbs and fan shape aren't
+measured; judge those on the sheet.
